@@ -10,6 +10,7 @@ interface ResearchRequest {
   budget: string;
   destination: string;
   urgency: string;
+  paymentPreference?: string;
   consent: boolean;
 }
 
@@ -31,23 +32,25 @@ export async function POST(req: NextRequest) {
     }
 
     const timestamp = new Date().toISOString();
-    const summary = `
-New LotLink Research Request
-============================
-Time: ${timestamp}
-Name: ${data.fullName}
-Email: ${data.email}
-Phone: ${data.phone}
-Language: ${data.language}
-Category: ${data.category}
-Budget (USD): ${data.budget}
-Destination: ${data.destination}
-Urgency: ${data.urgency}
+    const packageLabel =
+      data.urgency === "priority" ? "Priority 24h – $349" : "Standard 48–72h – $199";
 
-Specific Request:
-${data.specificRequest}
-============================
-`;
+    const summary = [
+      `New LotLink Research Request`,
+      `Time: ${timestamp}`,
+      `Name: ${data.fullName}`,
+      `Email: ${data.email}`,
+      `Phone/WhatsApp: ${data.phone}`,
+      `Language: ${data.language}`,
+      `Category: ${data.category}`,
+      `Budget (USD): ${data.budget}`,
+      `Destination: ${data.destination}`,
+      `Package: ${packageLabel}`,
+      `Payment preference: ${data.paymentPreference || "USDT/USDC"}`,
+      ``,
+      `Specific request:`,
+      data.specificRequest,
+    ].join("\n");
 
     const discordWebhook = process.env.DISCORD_WEBHOOK_URL;
     if (discordWebhook) {
@@ -55,14 +58,30 @@ ${data.specificRequest}
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: `**New Research Request**\n\`\`\`${summary}\`\`\``,
+          embeds: [
+            {
+              title: "New Research Request",
+              color: 2269942,
+              description: summary,
+              fields: [
+                { name: "Email", value: data.email, inline: true },
+                { name: "Phone", value: data.phone, inline: true },
+                { name: "Package", value: packageLabel, inline: true },
+              ],
+              footer: { text: "LotLink intake" },
+              timestamp,
+            },
+          ],
         }),
       });
+    } else {
+      console.log("[LotLink] No DISCORD_WEBHOOK_URL set. Request logged:", summary);
     }
 
     return NextResponse.json({
       success: true,
       message: "Request received successfully",
+      package: packageLabel,
     });
   } catch (error) {
     console.error("Research request error:", error);
